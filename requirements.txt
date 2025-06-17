@@ -1,0 +1,9 @@
+streamlit
+pandas
+langchain
+langchain-community
+langchain-google-genai
+google-generativeai
+langchain-openai
+python-dotenv
+tabulate
