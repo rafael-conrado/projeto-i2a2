@@ -1,84 +1,224 @@
-# 📊 Agente NF Analytics
+# 🍽️ Automação de Compra de VR/VA
 
-Um aplicativo Streamlit que permite a análise de arquivos CSV (incluindo aqueles compactados em ZIP) usando Modelos de Linguagem Grande (LLMs) para responder a perguntas em linguagem natural.
+Sistema inteligente de automação para processamento de benefícios de Vale Refeição (VR) e Vale Alimentação (VA) com supervisão de IA.
 
-## 🌟 O que é?
+## 📋 Sobre o Projeto
 
-O "Agente NF Analytics" é uma ferramenta interativa construída com Streamlit que atua como um "agente inteligente" para seus dados em CSV. Ele permite que você carregue um ou múltiplos arquivos CSV (ou um arquivo ZIP contendo CSVs) e, em seguida, faça perguntas sobre esses dados em português. Nos bastidores, o aplicativo utiliza um LLM para converter suas perguntas em comandos SQL, executar esses comandos em um banco de dados SQLite (criado temporariamente a partir de seus CSVs) e, finalmente, interpretar os resultados de volta para uma explicação compreensível.
+Este sistema automatiza o processo de cálculo e geração de relatórios de benefícios alimentação para funcionários, utilizando **agentes inteligentes** para validação e supervisão dos dados. O projeto combina automação de processos com inteligência artificial para garantir precisão e eficiência na gestão de benefícios corporativos.
 
-## ⚙️ Como Funciona?
+### ✨ Principais Funcionalidades
 
-1.  **Upload de Arquivos**: Você faz o upload de um ou mais arquivos CSV, ou um arquivo ZIP contendo CSVs.
-2.  **Processamento Interno**:
-    * Os arquivos CSV são lidos e suas colunas são "sanitizadas" para um formato seguro para banco de dados (snake_case).
-    * Cada CSV é então carregado em uma tabela separada dentro de um banco de dados SQLite temporário.
-    * Um agente LLM é inicializado, configurado com o esquema do banco de dados (nomes das tabelas e colunas).
-3.  **Interação com o Usuário**:
-    * Você seleciona o provedor do modelo (OpenAI, Ollama, Google Gemini) e o modelo específico que deseja usar.
-    * Insere sua chave de API, se necessário, para os provedores de modelos pagos.
-    * Você digita sua pergunta em linguagem natural sobre os dados carregados.
-4.  **Geração e Execução de SQL**:
-    * O agente LLM recebe sua pergunta e o esquema do banco de dados.
-    * Ele gera um comando SQL apropriado para responder à sua pergunta.
-    * Este comando SQL é executado no banco de dados SQLite.
-    * Se houver um erro na execução do SQL, o agente tenta corrigi-lo e executa novamente.
-5.  **Geração da Resposta**:
-    * Os resultados da consulta SQL são passados de volta para o LLM.
-    * O LLM interpreta esses resultados e os traduz para uma explicação clara e formatada em português, apresentando-os a você.
+- 🔄 **Processamento Automático** de planilhas de funcionários
+- 🤖 **Supervisão Inteligente** com LLMs (Gemini, OpenAI, OpenRouter)
+- 📊 **Detecção Automática** de tipos de planilha
+- ✅ **Validações Automáticas** de integridade de dados
+- 🧮 **Cálculos Complexos** com regras de negócio
+- 📈 **Geração de Relatórios** executivos
+- 📥 **Interface Web** intuitiva com Streamlit
 
-## 🚀 Como Testar (Rodar Localmente)
+## 🏗️ Arquitetura
 
-Siga os passos abaixo para configurar e rodar o aplicativo em sua máquina local:
+O sistema é construído com uma arquitetura de **agentes orquestrados**:
 
-1.  **Clone o Repositório** (se ainda não o fez):
-    ```bash
-    git clone https://github.com/rafael-conrado/projeto-i2a2
-    cd projeto-i2a2
-    ```
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Ingestão  │───▶│ Validações  │───▶│  Cálculo    │───▶│ Exportação  │───▶│ Explicação  │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+       │                   │                   │                   │                   │
+   Extrai ZIP         Verifica dados      Processa regras      Gera XLSX        Relatório IA
+   Carrega dados      Valida integridade  Calcula benefícios   Formata planilha  Explica resultados
+```
 
-2.  **Crie e Ative um Ambiente Virtual** (recomendado):
-    ```bash
-    python -m venv venv
-    # No Windows:
-    .\venv\Scripts\activate
-    # No macOS/Linux:
-    source venv/bin/activate
-    ```
+## 🚀 Instalação
 
-3.  **Instale as Dependências**:
-    Certifique-se de que você tem o `requirements.txt` no diretório raiz do projeto.
-    ```bash
-    pip install -r requirements.txt
-    ```
+### Pré-requisitos
 
-4.  **Prepare suas Chaves de API** (se for usar OpenAI ou Google Gemini):
-    * **OpenAI**: Obtenha sua API Key em [OpenAI Platform](https://platform.openai.com/).
-    * **Google Gemini**: Obtenha sua API Key em [Google AI Studio](https://aistudio.google.com/app/apikey).
-    * Você precisará inserir estas chaves no campo apropriado dentro do aplicativo Streamlit quando ele estiver em execução.
+- Python 3.8+
+- pip
 
-5.  **Execute o Aplicativo Streamlit**:
-    ```bash
-    streamlit run app.py
-    ```
+### Passos de Instalação
 
-    Isso abrirá o aplicativo no seu navegador padrão.
+1. **Clone o repositório**
+```bash
+git clone https://github.com/rafael-conrado/projeto-i2a2
+cd projeto-i2a2
+```
 
-6.  **Interaja com o Aplicativo**:
-    * No navegador, selecione o provedor do modelo e o modelo desejado.
-    * Insira sua chave de API, se aplicável.
-    * Clique em "Arraste CSVs ou ZIP" para fazer o upload dos seus arquivos de dados.
-    * Uma vez que os arquivos são processados, uma caixa de chat aparecerá.
-    * Comece a fazer perguntas sobre seus dados! Por exemplo: "Qual o total de vendas por produto?", "Quais clientes compraram mais de R$ 1000?", etc.
+2. **Instale as dependências**
+```bash
+pip install -r requirements.txt
+```
 
-## ✨ Para que Serve?
+3. **Configure as variáveis de ambiente** (opcional)
+```bash
+# Crie um arquivo .env
+GEMINI_API_KEY=sua_chave_gemini
+OPENAI_API_KEY=sua_chave_openai
+OPENROUTER_API_KEY=sua_chave_openrouter
+```
 
-O "Agente NF Analytics" é ideal para:
+## 🎯 Como Usar
 
-* **Análise Rápida de Dados**: Obtenha insights de seus arquivos CSV sem a necessidade de escrever consultas SQL complexas ou scripts de programação.
-* **Usuários Não Técnicos**: Permite que pessoas sem conhecimento em SQL ou programação analisem grandes volumes de dados.
-* **Exploração de Dados**: Facilita a exploração e a descoberta de padrões em seus conjuntos de dados de forma conversacional.
-* **Relatórios Ad-hoc**: Gere relatórios e resumos rápidos sobre seus dados para tomadas de decisão.
-* **Análise de Notas Fiscais (NF)**: Embora genérico para CSVs, o nome "NF Analytics" sugere uma aplicação específica para dados de notas fiscais, permitindo perguntas como "Qual o valor total das notas fiscais do mês passado?", "Quais produtos foram mais vendidos na região X?", etc.
-* **Prototipagem Rápida**: Desenvolva e teste rapidamente modelos de linguagem em diferentes plataformas (OpenAI, Ollama, Gemini) para suas necessidades de análise de dados.
+### 1. Preparação dos Dados
 
-Com esta ferramenta, a análise de dados se torna tão simples quanto fazer uma pergunta!
+Prepare um arquivo ZIP contendo as seguintes planilhas:
+
+**Obrigatórias:**
+- `ADMISSÃO [MÊS].xlsx` - Funcionários admitidos no mês
+- `ATIVOS.xlsx` - Lista de funcionários ativos
+- `DESLIGADOS.xlsx` - Funcionários desligados
+- `FÉRIAS.xlsx` - Funcionários em férias
+- `Base dias uteis.xlsx` - Dias úteis por sindicato
+- `Base sindicato x valor.xlsx` - Valores por estado
+
+**Opcionais:**
+- `AFASTAMENTOS.xlsx` - Funcionários afastados
+- `EXTERIOR.xlsx` - Funcionários no exterior
+- `APRENDIZ.xlsx` - Aprendizes
+- `ESTAGIO.xlsx` - Estagiários
+
+### 2. Execução
+
+```bash
+streamlit run app.py
+```
+
+### 3. Interface Web
+
+1. **Configure os parâmetros:**
+   - **Competência**: Mês/ano (ex: 2025-05)
+   - **% Empresa**: Fração paga pela empresa (0.0-1.0)
+   - **Ativar LLM**: Habilita supervisão inteligente
+
+2. **Selecione o provedor LLM** (se ativado):
+   - Gemini (recomendado)
+   - OpenAI
+   - OpenRouter
+
+3. **Faça upload** do arquivo ZIP ou planilhas individuais
+
+4. **Aguarde o processamento** e baixe os resultados
+
+## 📊 Saídas do Sistema
+
+### 1. Base Final
+Planilha com os cálculos finais contendo:
+- Matrícula do funcionário
+- Data de admissão
+- Sindicato
+- Competência
+- Dias trabalhados
+- Valor diário VR
+- Total
+- Custo empresa
+- Desconto profissional
+
+### 2. Validações
+Relatório de validações automáticas:
+- Contagem de funcionários por categoria
+- Verificações de integridade
+- Alertas de inconsistências
+
+### 3. Relatório Executivo
+Relatório gerado por IA com:
+- Resumo dos dados processados
+- Explicações de validações
+- Observações importantes
+
+## 🔧 Configuração Avançada
+
+### Provedores LLM Suportados
+
+| Provedor | Modelos Padrão | Configuração |
+|----------|----------------|--------------|
+| **Gemini** | gemini-1.5-flash, gemini-1.5-pro | `GEMINI_API_KEY` |
+| **OpenAI** | gpt-4o-mini, gpt-4o | `OPENAI_API_KEY` |
+| **OpenRouter** | deepseek/deepseek-r1-0528 | `OPENROUTER_API_KEY` |
+
+### Variáveis de Ambiente
+
+```bash
+# Chaves de API (opcional - podem ser inseridas na interface)
+GEMINI_API_KEY=sua_chave_aqui
+OPENAI_API_KEY=sua_chave_aqui
+OPENROUTER_API_KEY=sua_chave_aqui
+```
+
+## 🧮 Regras de Negócio
+
+O sistema aplica as seguintes regras:
+
+### Exclusões Automáticas
+- Estagiários
+- Aprendizes
+- Funcionários no exterior
+- Afastados/Licenças
+- Diretores
+
+### Cálculos Proporcionais
+- **Admissões**: Proporcional ao dia de admissão
+- **Desligamentos**: 
+  - Até dia 15: Exclusão total (se comunicado)
+  - Após dia 15: Proporcional ao dia de desligamento
+
+### Valores por Estado
+- São Paulo: Padrão
+- Rio Grande do Sul: Configurável
+- Rio de Janeiro: Configurável
+- Paraná: Configurável
+
+## 🛠️ Desenvolvimento
+
+### Estrutura do Código
+
+```
+projeto-i2a2/
+├── app.py              # Interface Streamlit
+├── agentes.py          # Orquestração de agentes
+├── vrva_funcoes.py     # Lógica de negócio
+├── requirements.txt    # Dependências
+└── README.md          # Este arquivo
+```
+
+### Executando Testes
+
+```bash
+# Instalar dependências de desenvolvimento
+pip install -r requirements.txt
+
+# Executar aplicação
+streamlit run app.py
+```
+
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
+
+## 📝 Licença
+
+Este projeto está sob a licença [MIT](LICENSE).
+
+## 🆘 Suporte
+
+Para dúvidas ou problemas:
+
+1. Verifique a seção de [Issues](../../issues)
+2. Crie uma nova issue com detalhes do problema
+3. Inclua logs de erro e exemplos de dados (sem informações sensíveis)
+
+## 🔄 Changelog
+
+### v1.0.0
+- ✅ Sistema inicial de automação
+- ✅ Interface Streamlit
+- ✅ Integração com LLMs
+- ✅ Processamento de planilhas
+- ✅ Geração de relatórios
+
+---
+
+**Desenvolvido com ❤️ para automatizar processos de RH**
