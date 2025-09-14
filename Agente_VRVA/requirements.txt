@@ -1,0 +1,22 @@
+# Núcleo de dados
+pandas
+numpy
+openpyxl
+xlsxwriter
+
+# Web app
+streamlit
+python-dotenv
+
+# Agentes / LLM (LangGraph + LangChain)
+langchain
+langchain-core
+langgraph
+langchain-openai
+langchain-google-genai
+openai
+google-generativeai
+
+# Robustez
+tenacity
+
