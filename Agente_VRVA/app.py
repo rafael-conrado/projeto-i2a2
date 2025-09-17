@@ -1,13 +1,17 @@
 # app.py
 
 from __future__ import annotations
+
 import io
 import os
 import zipfile
 import logging
 from typing import List, Optional, Dict
+
+import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
+
 from agentes import construir_grafo, RodadaEntrada
 from vrva_funcoes import df_para_streamlit
 
@@ -65,7 +69,9 @@ def empacotar_zip_em_memoria(
                 zf.writestr(f.name, f.getvalue())
     return mem.getvalue()
 
+
 # ─────────────────── parâmetros ───────────────────
+st.markdown("## ⚙️ Configurações Iniciais")
 c1, c2, c3 = st.columns(3)
 with c1:
     competencia = st.text_input(
@@ -79,50 +85,48 @@ with c2:
     )
 with c3:
     usar_llm = st.toggle(
-        "Ativar LLM (agente supervisor)", value=True,
-        help="Quando ativo, a LLM supervisiona validações, explicações e fallbacks."
+        "Ativar LLM (agentes inteligentes)", value=True,
+        help="Quando ativo, os agentes de validação, auditoria e relatório usam LLM."
     )
 
-# Bloco LLM só aparece quando usar_llm=True
+st.divider()
+
+# ─────────────────── modelos LLM ───────────────────
+st.markdown("## 🤖 Modelos e Chaves de API")
 modelo_escolhido: Optional[str] = None
 provedor = None
 gemini_key = openai_key = openrouter_key = None
 
-with st.container():
-    st.markdown("#### Modelos e chaves de API")
-    if usar_llm:
-        c4, c5 = st.columns(2)
-        with c4:
-            provedor = st.selectbox("Provedor LLM", ["gemini", "openai", "openrouter"], index=0)
-        with c5:
-            opcoes = PROVIDER_MODELS.get(provedor, ["Outro (digitar…)"])
-            modelo_sel = st.selectbox("Modelo", opcoes, index=0)
-        if modelo_sel == "Outro (digitar…)":
-            modelo_escolhido = st.text_input(
-                "Modelo (custom)",
-                value="",
-                placeholder="Ex.: gemini-1.5-flash / gpt-4o-mini / deepseek/deepseek-r1-0528",
-            ).strip() or None
-        else:
-            modelo_escolhido = modelo_sel
-
-        st.caption("Informe a chave de API do provedor selecionado (ou configure via variáveis de ambiente).")
-        if provedor == "gemini":
-            gemini_key = st.text_input(
-                "GEMINI_API_KEY", type="password", value=os.getenv("GEMINI_API_KEY", "")
-            )
-        elif provedor == "openai":
-            openai_key = st.text_input(
-                "OPENAI_API_KEY", type="password", value=os.getenv("OPENAI_API_KEY", "")
-            )
-        elif provedor == "openrouter":
-            openrouter_key = st.text_input(
-                "OPENROUTER_API_KEY", type="password", value=os.getenv("OPENROUTER_API_KEY", "")
-            )
+if usar_llm:
+    c4, c5 = st.columns(2)
+    with c4:
+        provedor = st.selectbox("Provedor LLM", ["gemini", "openai", "openrouter"], index=0)
+    with c5:
+        opcoes = PROVIDER_MODELS.get(provedor, ["Outro (digitar…)"])
+        modelo_sel = st.selectbox("Modelo", opcoes, index=0)
+    if modelo_sel == "Outro (digitar…)":
+        modelo_escolhido = st.text_input(
+            "Modelo (custom)",
+            value="",
+            placeholder="Ex.: gemini-1.5-flash / gpt-4o-mini / deepseek/deepseek-r1-0528",
+        ).strip() or None
     else:
-        st.info("LLM desativada: o pipeline executará apenas as regras determinísticas.")
+        modelo_escolhido = modelo_sel
 
-st.markdown("#### Envie o pacote `.zip` **ou** as planilhas (.xlsx/.xls)")
+    st.caption("Informe a chave de API do provedor selecionado (ou configure via variáveis de ambiente).")
+    if provedor == "gemini":
+        gemini_key = st.text_input("🔑 GEMINI_API_KEY", type="password", value=os.getenv("GEMINI_API_KEY", ""))
+    elif provedor == "openai":
+        openai_key = st.text_input("🔑 OPENAI_API_KEY", type="password", value=os.getenv("OPENAI_API_KEY", ""))
+    elif provedor == "openrouter":
+        openrouter_key = st.text_input("🔑 OPENROUTER_API_KEY", type="password", value=os.getenv("OPENROUTER_API_KEY", ""))
+else:
+    st.info("LLM desativada: o pipeline executará apenas as regras determinísticas.")
+
+st.divider()
+
+# ─────────────────── upload ───────────────────
+st.markdown("## 📂 Upload de Arquivos")
 uploads = st.file_uploader("Arraste aqui", type=["zip", "xlsx", "xls"], accept_multiple_files=True)
 
 # ─────────────────── execução ───────────────────
@@ -150,7 +154,7 @@ if uploads:
         pct_empresa=float(pct_empresa),
         usar_llm=bool(usar_llm),
         provedor=(provedor or "gemini").strip(),
-        modelo=modelo_escolhido or None,
+        modelo=(modelo_escolhido or None),
         gemini_key=(gemini_key or os.getenv("GEMINI_API_KEY") or None),
         openai_key=(openai_key or os.getenv("OPENAI_API_KEY") or None),
         openrouter_key=(openrouter_key or os.getenv("OPENROUTER_API_KEY") or None),
@@ -164,35 +168,68 @@ if uploads:
         st.success("✅ Processamento concluído.")
         st.caption(f"Arquivos extraídos em: {saida.tmpdir}")
 
-        st.markdown("### 📋 Relatório (Agente de Explicação)")
-        st.code(saida.resultado.relatorio, language="text")
+        st.divider()
 
-        st.markdown("### ✅ Pré‑visualização (100 primeiras linhas)")
+        # ─────────────────── total geral destacado ───────────────────
+        total_geral = float(saida.resultado.base_final["TOTAL"].sum()) if not saida.resultado.base_final.empty else 0.0
+        st.markdown("## 💰 Total Geral Calculado")
+        st.markdown(
+            f"""
+            <div style='background: linear-gradient(90deg, #4facfe, #00f2fe);
+                        padding: 20px; border-radius: 10px;
+                        text-align: center; color: white;
+                        font-size: 24px; font-weight: bold;'>
+                R$ {total_geral:,.2f}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.divider()
+
+        # ─────────────────── relatório ───────────────────
+        st.markdown("## 📋 Relatório (Agente de Relatório)")
+        st.markdown(saida.resultado.relatorio, unsafe_allow_html=True)
+
+        st.divider()
+
+        # ─────────────────── pré-visualização ───────────────────
+        st.markdown("## 👁️ Pré-visualização (100 primeiras linhas)")
         st.dataframe(df_para_streamlit(saida.resultado.base_final.head(100)), use_container_width=True)
 
-        st.markdown("### 🛡️ Validações")
+        st.divider()
+
+        # ─────────────────── validações ───────────────────
+        st.markdown("## 🛡️ Validações")
         st.dataframe(df_para_streamlit(saida.resultado.validacoes), use_container_width=True)
 
+        st.divider()
+
+        # ─────────────────── downloads ───────────────────
+        st.markdown("## 📥 Downloads")
+
         @st.cache_data
-        def _to_csv_bytes(df):
+        def _to_csv_bytes(df: pd.DataFrame) -> bytes:
             return df.to_csv(index=False).encode("utf-8")
 
         st.download_button(
-            "⬇️ Baixar base final (CSV)",
+            "⬇️ Base Final (CSV)",
             data=_to_csv_bytes(saida.resultado.base_final),
-            file_name=f"VRVA_base_final_{entrada.competencia.replace('/','-')}.csv",
+            file_name="VRVA_base_final_05-2025.csv",
             mime="text/csv",
         )
+
         st.download_button(
-            "⬇️ Baixar validações (CSV)",
+            "⬇️ Validações (CSV)",
             data=_to_csv_bytes(saida.resultado.validacoes),
-            file_name=f"VRVA_validacoes_{entrada.competencia.replace('/','-')}.csv",
+            file_name="VRVA_validacoes_05-2025.csv",
             mime="text/csv",
         )
+
         st.download_button(
-            "⬇️ Baixar planilha no padrão (XLSX)",
+            "⬇️ Planilha Final (XLSX)",
             data=saida.xlsx_bytes,
-            file_name=f"VR_MENSAL_{entrada.competencia.replace('/','-')}.xlsx",
+            file_name="VR MENSAL 05.2025.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
