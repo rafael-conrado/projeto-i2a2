@@ -1,0 +1,17 @@
+streamlit
+pandas
+numpy
+plotly
+matplotlib
+pyyaml
+cryptography
+pillow
+langchain
+langchain-core
+langchain-openai
+langchain-google-genai
+langgraph
+pytest
+pytest-cov
+pytest-html
+python-dotenv

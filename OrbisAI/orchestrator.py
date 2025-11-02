@@ -1,0 +1,611 @@
+# orchestrator_clean.py — Orquestrador cognitivo (XML-first, clean)
+from __future__ import annotations
+
+import os
+import json
+import time
+import logging
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+from banco_de_dados import BancoDeDados
+from validacao import ValidadorFiscal
+from memoria import MemoriaSessao
+from agentes import (
+    AgenteXMLParser,
+    AgenteNormalizadorCampos,
+    MetricsAgent,
+)
+
+# Agente analítico é opcional (exportado apenas quando disponível)
+try:
+    from agentes import AgenteAnalitico  # type: ignore
+except Exception:
+    AgenteAnalitico = None  # type: ignore
+
+# RAG e Risco (opcionais)
+try:
+    from agentes.rag_retriever import SimpleRAG  # type: ignore
+except Exception:
+    SimpleRAG = None  # type: ignore
+try:
+    from agentes.risk_agent import compute_risk_score, detect_duplicates  # type: ignore
+except Exception:
+    compute_risk_score = None  # type: ignore
+    detect_duplicates = None  # type: ignore
+
+log = logging.getLogger(__name__)
+
+
+class Orchestrator:
+    """
+    Pipeline cognitivo e enxuto, 100% focado em XML.
+    - Somente .xml é processado; demais formatos vão para quarentena.
+    - Após extração via AgenteXMLParser, normaliza campos, avalia qualidade
+      (completeness/critical/sanity), registra decisões (blackboard) e ajusta status.
+    - Reprocessamento/revalidação utilitários.
+    - Q&A com LLM quando disponível; caso contrário, respostas determinísticas seguras.
+    """
+
+    # Modo de operação
+    ONLY_XML: bool = os.getenv("ONLY_XML", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+    # Sinais de qualidade
+    CRITICAL_FIELDS: Tuple[str, ...] = ("emitente_cnpj", "valor_total", "data_emissao")
+    COMPLETENESS_MIN: float = float(os.getenv("COMPLETENESS_MIN", "0.65"))
+    CRITICAL_MIN_HITS: int = int(os.getenv("CRITICAL_MIN_HITS", "2"))
+    SANITY_MIN: float = float(os.getenv("SANITY_MIN", "0.75"))
+
+    def __init__(
+        self,
+        db: BancoDeDados,
+        validador: Optional[ValidadorFiscal] = None,
+        memoria: Optional[MemoriaSessao] = None,
+        llm: Optional[Any] = None,
+    ) -> None:
+        self.db = db
+        self.validador = validador or ValidadorFiscal()
+        self.memoria = memoria or MemoriaSessao(self.db)
+        self.llm = llm
+
+        self.metrics_agent = MetricsAgent(llm=self.llm)
+        self.xml_agent = AgenteXMLParser(self.db, self.validador, self.metrics_agent)
+        self.normalizador = AgenteNormalizadorCampos(
+            llm=self.llm,
+            enable_llm=True if self.llm else False,
+            drop_general_fields=False,
+            keep_context_copy=True,
+        )
+        self.analitico = (AgenteAnalitico(self.llm, self.memoria) if (self.llm and AgenteAnalitico) else None)  # type: ignore
+
+        # RAG baseado em embeddings (se possível)
+        self.rag = None
+        if self.llm and SimpleRAG:
+            try:
+                # Inferir provider por atributo interno
+                prov = getattr(self.llm, "_provider", None)
+                key = None
+                if prov == "openai":
+                    key = os.getenv("OPENAI_API_KEY")
+                elif prov in {"gemini","google"}:
+                    key = os.getenv("GEMINI_API_KEY")
+                self.rag = SimpleRAG(self.db, prov, key)
+            except Exception:
+                self.rag = None
+
+        if self.ONLY_XML:
+            log.info("Orchestrator: Modo Somente XML ativo.")
+        else:
+            log.info("Orchestrator: XML preferencial (sem OCR/NLP).")
+
+    # --------------------------- Ingestão ---------------------------
+    def processar_automatico(self, nome: str, conteudo: bytes, origem: str = "upload_ui") -> int:
+        ext = Path(nome).suffix.lower()
+        if ext == ".xml":
+            doc_id = int(self.xml_agent.processar(nome, conteudo, origem=origem))
+            # Normalização pós-extração
+            try:
+                self._normalizar_documento(doc_id)
+            except Exception as e:
+                log.debug(f"Normalização falhou doc_id={doc_id}: {e}")
+            # Camada cognitiva pós-extração
+            try:
+                self._avaliar_e_anotar(doc_id)
+            except Exception as e:
+                log.debug(f"Avaliacao cognitiva falhou doc_id={doc_id}: {e}")
+            return doc_id
+
+        # Quarentena para não-XML
+        try:
+            caminho = str(self.db.save_upload(nome, conteudo))
+        except Exception:
+            caminho = None
+        motivo = (
+            "Modo Somente XML: envie o XML fiscal correspondente." if self.ONLY_XML else "Formato não suportado."
+        )
+        try:
+            doc_id = self.db.inserir_documento(
+                nome_arquivo=nome,
+                tipo=ext.lstrip(".") or "desconhecido",
+                origem=origem,
+                hash=self.db.hash_bytes(conteudo),
+                status="quarentena",
+                data_upload=self.db.now(),
+                caminho_arquivo=caminho,
+                motivo_rejeicao=motivo,
+            )
+            # Registra decisão para transparência
+            self._merge_meta_json(doc_id, {
+                "blackboard": {"decisions": [{"ts": time.time(), "msg": "Arquivo não-XML enviado à quarentena."}]}
+            })
+            return int(doc_id)
+        except Exception as e:
+            log.error(f"Falha ao colocar em quarentena '{nome}': {e}")
+            try:
+                return int(self.db.inserir_documento(
+                    nome_arquivo=nome,
+                    tipo=ext.lstrip(".") or "desconhecido",
+                    origem=origem,
+                    hash=self.db.hash_bytes(conteudo),
+                    status="erro",
+                    data_upload=self.db.now(),
+                    motivo_rejeicao=f"Falha na ingestão: {e}",
+                ))
+            except Exception:
+                return -1
+
+    # --------------------------- Reprocessamento ---------------------------
+    def reprocessar_documento(self, documento_id: int) -> Dict[str, Any]:
+        doc = self.db.get_documento(int(documento_id)) or {}
+        nome = doc.get("nome_arquivo") or f"doc_{int(documento_id)}.xml"
+        caminho = doc.get("caminho_xml") or doc.get("caminho_arquivo")
+        if not caminho or not os.path.exists(caminho):
+            return {"ok": False, "mensagem": "Caminho do arquivo não encontrado para reprocessar."}
+        try:
+            with open(caminho, "rb") as f:
+                conteudo = f.read()
+            if Path(nome).suffix.lower() != ".xml" and Path(caminho).suffix.lower() == ".xml":
+                nome = Path(nome).with_suffix(".xml").name
+            novo_id = self.xml_agent.processar(nome, conteudo, origem="reprocessamento")
+            try:
+                self._normalizar_documento(int(novo_id))
+                self._avaliar_e_anotar(int(novo_id))
+            except Exception:
+                pass
+            return {"ok": True, "mensagem": f"Documento reprocessado (novo id {int(novo_id)}).", "novo_id": int(novo_id)}
+        except Exception as e:
+            return {"ok": False, "mensagem": f"Falha no reprocessamento: {e}"}
+
+    # --------------------------- Revalidação ---------------------------
+    def revalidar_documento(self, documento_id: int) -> Dict[str, Any]:
+        try:
+            self.validador.validar_documento(doc_id:=int(documento_id), db=self.db)  # type: ignore
+            return {"ok": True, "mensagem": f"Documento {int(documento_id)} revalidado."}
+        except Exception as e:
+            return {"ok": False, "mensagem": f"Falha na revalidação: {e}"}
+
+    # --------------------------- Q&A / Análises ---------------------------
+    def responder_pergunta(
+        self,
+        pergunta: str,
+        scope_filters: Optional[Dict[str, Any]] = None,
+        safe_mode: bool = False,
+    ) -> Dict[str, Any]:
+        t0 = time.time()
+        scope_filters = scope_filters or {}
+
+        if not pergunta:
+            return {"texto": "Pergunta vazia.", "duracao_s": 0.0, "agent_name": "SafeQuery"}
+
+        # Preferir LLM sempre que disponível; respostas determinísticas apenas como fallback
+        if not safe_mode and self.analitico and self.llm:
+            try:
+                catalog = self._build_catalog(scope_filters)
+                # RAG: opcional — fornece contexto recuperado como tabela 'rag_context'
+                try:
+                    if self.rag:
+                        # limitar escopo de documentos
+                        df_docs = catalog.get("documentos")
+                        scope_ids = df_docs["id"].astype(int).tolist() if (df_docs is not None and not df_docs.empty and "id" in df_docs.columns) else None
+                        if scope_ids:
+                            # indexar on-demand (primeira vez)
+                            self.rag.index_documents(scope_ids)
+                        rag_df = self.rag.query(pergunta, scope_doc_ids=scope_ids, top_k=6)
+                        if rag_df is not None and not rag_df.empty:
+                            catalog["rag_context"] = rag_df
+                except Exception:
+                    pass
+                out = self.analitico.responder(pergunta, catalog)
+                out["duracao_s"] = float(time.time() - t0)
+                out["agent_name"] = out.get("agent_name", "AgenteAnalitico")
+                return out
+            except Exception as e:
+                log.warning(f"LLM/Analítico falhou; caindo para modo seguro: {e}")
+
+        # Modo seguro: respostas determinísticas simples
+        code, df, text = self._safe_answer(pergunta, scope_filters)
+        return {
+            "texto": text,
+            "tabela": df,
+            "code": code,
+            "duracao_s": float(time.time() - t0),
+            "agent_name": "SafeQuery",
+        }
+
+    def _build_catalog(self, scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Constrói o catálogo de DataFrames para o Agente Analítico a partir do SQLite,
+        aplicando filtros de escopo quando fornecidos.
+        Tabelas incluídas: documentos, itens, impostos, documentos_detalhes.
+        """
+        scope = scope or {}
+        where_parts: list[str] = []
+        uf = (scope.get("uf") or "").strip().upper()
+        if uf:
+            where_parts.append(f"(emitente_uf = '{uf}' OR destinatario_uf = '{uf}')")
+        tipos = scope.get("tipo") or []
+        if isinstance(tipos, (list, tuple)) and tipos:
+            tipos_sql = ", ".join([f"'{str(t).strip()}'" for t in tipos])
+            where_parts.append(f"tipo IN ({tipos_sql})")
+        doc_where = " AND ".join(where_parts) if where_parts else None
+
+        # Documentos
+        df_docs = self.db.query_table("documentos", where=doc_where)
+
+        # Itens (filtra por documentos, quando houver filtro)
+        itens_where = None
+        if doc_where:
+            itens_where = f"documento_id IN (SELECT id FROM documentos WHERE {doc_where})"
+        df_itens = self.db.query_table("itens", where=itens_where)
+
+        # Impostos (filtra por itens -> documentos quando houver filtro)
+        impostos_where = None
+        if doc_where:
+            impostos_where = (
+                "item_id IN (SELECT id FROM itens WHERE documento_id IN (SELECT id FROM documentos WHERE "
+                + doc_where + "))"
+            )
+        df_impostos = self.db.query_table("impostos", where=impostos_where)
+
+        # Detalhes (key-value por documento)
+        detalhes_where = None
+        if doc_where:
+            detalhes_where = f"documento_id IN (SELECT id FROM documentos WHERE {doc_where})"
+        df_det = self.db.query_table("documentos_detalhes", where=detalhes_where)
+
+        return {
+            "documentos": df_docs,
+            "itens": df_itens,
+            "impostos": df_impostos,
+            "documentos_detalhes": df_det,
+        }
+
+    # --------------------------- Camada cognitiva ---------------------------
+    def _avaliar_e_anotar(self, doc_id: int) -> None:
+        doc = self.db.get_documento(doc_id) or {}
+        meta = self._safe_json_loads(doc.get("meta_json"))
+        bblog: list[Dict[str, Any]] = []
+
+        # 1) Sinais extraídos
+        meta_root = meta.get("__meta__") or {}
+        completeness = float(meta_root.get("field_completeness") or 0.0)
+        sanity = None
+        try:
+            sanity = float(((meta.get("__meta__") or {}).get("normalizador") or {}).get("sanity_score"))
+        except Exception:
+            sanity = None
+        crit_hits = 0
+        for f in self.CRITICAL_FIELDS:
+            val = doc.get(f)
+            if val not in (None, "", [], {}):
+                crit_hits += 1
+
+        bblog.append({"ts": time.time(), "msg": f"Completeness={completeness:.2f}; critical_hits={crit_hits}; sanity={sanity if sanity is not None else '—'}"})
+
+        # 2) Heurísticas de qualidade → status
+        status = doc.get("status") or "processado"
+        needs_review = False
+        if completeness < self.COMPLETENESS_MIN:
+            needs_review = True
+            bblog.append({"ts": time.time(), "msg": f"Completeness abaixo do mínimo ({self.COMPLETENESS_MIN})."})
+        if crit_hits < self.CRITICAL_MIN_HITS:
+            needs_review = True
+            bblog.append({"ts": time.time(), "msg": f"Campos críticos insuficientes (min={self.CRITICAL_MIN_HITS})."})
+        if sanity is not None and sanity < self.SANITY_MIN:
+            needs_review = True
+            bblog.append({"ts": time.time(), "msg": f"Sanidade do normalizador abaixo do mínimo ({self.SANITY_MIN})."})
+
+        if needs_review and status not in ("revisado",):
+            self.db.atualizar_documento_campos(doc_id, status="revisao_pendente")
+            bblog.append({"ts": time.time(), "msg": "Status ajustado para revisao_pendente."})
+        else:
+            bblog.append({"ts": time.time(), "msg": f"Status mantido: {status}."})
+
+        # 2.1) Agente de Risco/Duplicidade (heurístico, somente dados estruturados)
+        try:
+            risk_out = compute_risk_score(self.db, int(doc_id)) if compute_risk_score else {"risk_score": None, "signals": []}
+            dup_out = detect_duplicates(self.db, int(doc_id)) if detect_duplicates else {"duplicates": []}
+        except Exception:
+            risk_out = {"risk_score": None, "signals": []}
+            dup_out = {"duplicates": []}
+        if risk_out.get("signals"):
+            bblog.extend({"ts": time.time(), "msg": f"Risco: {s}"} for s in risk_out["signals"]) 
+
+        # 3) Persistir decisões no meta_json
+        patch = meta.copy()
+        patch.setdefault("blackboard", {})
+        patch["blackboard"].setdefault("decisions", [])
+        patch["blackboard"]["decisions"].extend(bblog)
+        patch.setdefault("quality", {"completeness": completeness, "critical_hits": crit_hits, "sanity": sanity})
+        if risk_out.get("risk_score") is not None:
+            patch.setdefault("risk", {})
+            patch["risk"]["score"] = float(risk_out["risk_score"])  # 0..1
+            try:
+                if isinstance(dup_out.get("duplicates"), list):
+                    patch["risk"]["duplicates"] = [int(x) for x in dup_out["duplicates"]]
+            except Exception:
+                pass
+            try:
+                if float(risk_out["risk_score"]) >= 0.6 and (doc.get("status") not in ("revisado",)):
+                    self.db.atualizar_documento_campos(doc_id, status="revisao_pendente")
+                    patch["blackboard"]["decisions"].append({"ts": time.time(), "msg": "Status ajustado por alto risco (>=0.6)."})
+            except Exception:
+                pass
+        self._merge_meta_json(doc_id, patch)
+
+    # --------------------------- Helpers ---------------------------
+    def _safe_json_loads(self, text: Optional[str]) -> Dict[str, Any]:
+        if not text:
+            return {}
+        try:
+            data = json.loads(text)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _merge_meta_json(self, doc_id: int, patch: Dict[str, Any]) -> None:
+        try:
+            atual = self.db.get_documento(doc_id) or {}
+            base = self._safe_json_loads(atual.get("meta_json"))
+
+            def _deep(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+                out = dict(a or {})
+                for k, v in (b or {}).items():
+                    if isinstance(v, dict) and isinstance(out.get(k), dict):
+                        out[k] = _deep(out[k], v)
+                    else:
+                        out[k] = v
+                return out
+
+            novo = _deep(base, patch or {})
+            self.db.atualizar_documento_campos(doc_id, meta_json=json.dumps(novo, ensure_ascii=False))
+        except Exception as e:
+            log.debug(f"Falha ao atualizar meta_json doc_id={doc_id}: {e}")
+
+    def _normalizar_documento(self, doc_id: int) -> None:
+        """Aplica normalização contextual e persiste campos e meta do normalizador."""
+        doc = self.db.get_documento(doc_id) or {}
+        if not doc:
+            return
+        try:
+            out = self.normalizador.normalizar(doc, keep_context_copy=True)
+        except Exception:
+            return
+        if not isinstance(out, dict) or not out:
+            return
+
+        # Se vier __meta__.normalizador, anexa ao meta_json
+        meta_patch: Dict[str, Any] = {}
+        nm = ((out.get("__meta__") or {}).get("normalizador") or None)
+        if nm and isinstance(nm, dict):
+            meta_patch.setdefault("__meta__", {})
+            meta_patch["__meta__"]["normalizador"] = nm
+
+        # Atualiza campos canônicos presentes
+        allowed = set(self.db._colunas_tabela("documentos")) if hasattr(self.db, "_colunas_tabela") else set()
+        update_fields: Dict[str, Any] = {}
+        for k, v in out.items():
+            if k.startswith("__"):
+                continue
+            if allowed and k not in allowed:
+                continue
+            if v is not None and v != doc.get(k):
+                update_fields[k] = v
+
+        if update_fields:
+            try:
+                self.db.atualizar_documento_campos(doc_id, **update_fields)
+            except Exception:
+                pass
+        if meta_patch:
+            self._merge_meta_json(doc_id, meta_patch)
+
+    def _safe_answer(self, pergunta: str, scope: Dict[str, Any]) -> tuple[str, Any, str]:
+        """
+        Respostas determinísticas comuns (SQL sobre SQLite) para perguntas frequentes.
+        Intents suportados (heurísticos, pt-BR):
+        - Top N emitentes/fornecedores por valor_total
+        - Totais por UF
+        - Totais por mês/ano (data_emissao)
+        - Totais por NCM/CFOP/CST (joins em itens/impostos)
+        - Top N itens por valor (com base em itens.valor_total)
+        - Resumo geral por tipo (fallback)
+        """
+        # Importa pandas sob demanda para evitar hard-dependency no import do módulo
+        import pandas as pd  # type: ignore
+        import re
+
+        # ---- Escopo base (UF, tipo) ----
+        where: list[str] = []
+        params: list[Any] = []
+        if scope.get("uf"):
+            uf = str(scope["uf"]).strip().upper()
+            if uf:
+                where.append("(emitente_uf = ? OR destinatario_uf = ?)")
+                params.extend([uf, uf])
+        tipos = scope.get("tipo") or []
+        if isinstance(tipos, (list, tuple)) and tipos:
+            # Usa placeholders para cada tipo
+            where.append("tipo IN (" + ", ".join(["?"] * len(tipos)) + ")")
+            params.extend([str(t).strip() for t in tipos])
+
+        # ---- Heurísticas de período (ano/mês) extraídas do texto ----
+        qraw = pergunta or ""
+        q = qraw.lower()
+
+        # entre AAAA-MM e AAAA-MM
+        m_between = re.search(r"entre\s+(\d{4}-\d{2})\s+e\s+(\d{4}-\d{2})", q)
+        if m_between:
+            ini, fim = m_between.group(1), m_between.group(2)
+            where.append("substr(data_emissao,1,7) BETWEEN ? AND ?")
+            params.extend([ini, fim])
+        else:
+            # mês específico AAAA-MM
+            m_month = re.search(r"(\d{4}-\d{2})", q)
+            if m_month:
+                ym = m_month.group(1)
+                where.append("substr(data_emissao,1,7) = ?")
+                params.append(ym)
+            else:
+                # ano específico AAAA
+                m_year = re.search(r"\b(20\d{2}|19\d{2})\b", q)
+                if m_year:
+                    yyyy = m_year.group(1)
+                    where.append("substr(data_emissao,1,4) = ?")
+                    params.append(yyyy)
+
+        where_clause = " AND ".join(where) if where else None
+
+        # ---- Top N helper ----
+        def topn_default(txt: str, default: int = 5) -> int:
+            m = re.search(r"top\s*(\d{1,3})", txt)
+            try:
+                if m:
+                    n = int(m.group(1))
+                    return max(1, min(n, 100))
+            except Exception:
+                pass
+            return default
+
+        # ---------- Intents específicas ----------
+        # 1) Top N emitentes/fornecedores por valor_total
+        if ("top" in q) and ("emitente" in q or "fornecedor" in q):
+            n = topn_default(q)
+            sql = (
+                "SELECT emitente_nome, SUM(COALESCE(valor_total,0)) AS total "
+                "FROM documentos"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause}"
+            sql += " GROUP BY emitente_nome ORDER BY total DESC LIMIT ?"
+            df = pd.read_sql_query(sql, self.db.conn, params=params + [n])
+            text = f"Top {n} emitentes por valor total."
+            return sql, df, text
+
+        # 2) Totais por UF
+        if ("uf" in q) and ("valor" in q or "faturamento" in q or "total" in q):
+            sql = (
+                "SELECT COALESCE(emitente_uf, destinatario_uf) AS uf, "
+                "SUM(COALESCE(valor_total,0)) AS total "
+                "FROM documentos"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause}"
+            sql += " GROUP BY uf ORDER BY total DESC"
+            df = pd.read_sql_query(sql, self.db.conn, params=params)
+            text = "Resumo de valores por UF."
+            return sql, df, text
+
+        # 3) Totais por mês
+        if ("mês" in q) or ("mensal" in q) or ("por mês" in q):
+            sql = (
+                "SELECT substr(data_emissao,1,7) AS mes, SUM(COALESCE(valor_total,0)) AS total "
+                "FROM documentos"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause}"
+            sql += " GROUP BY mes ORDER BY mes"
+            df = pd.read_sql_query(sql, self.db.conn, params=params)
+            text = "Totais por mês (YYYY-MM)."
+            return sql, df, text
+
+        # 4) Totais por ano
+        if ("ano" in q) or ("anual" in q) or ("por ano" in q):
+            sql = (
+                "SELECT substr(data_emissao,1,4) AS ano, SUM(COALESCE(valor_total,0)) AS total "
+                "FROM documentos"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause}"
+            sql += " GROUP BY ano ORDER BY ano"
+            df = pd.read_sql_query(sql, self.db.conn, params=params)
+            text = "Totais por ano."
+            return sql, df, text
+
+        # 5) Totais por NCM (itens)
+        if "ncm" in q:
+            n = topn_default(q, default=10)
+            sql = (
+                "SELECT i.ncm AS ncm, SUM(COALESCE(i.valor_total, i.quantidade*i.valor_unitario, 0)) AS total "
+                "FROM itens i JOIN documentos d ON d.id = i.documento_id"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause.replace('emitente_uf', 'd.emitente_uf').replace('destinatario_uf', 'd.destinatario_uf').replace('tipo', 'd.tipo').replace('data_emissao', 'd.data_emissao')}"
+            sql += " GROUP BY i.ncm ORDER BY total DESC LIMIT ?"
+            df = pd.read_sql_query(sql, self.db.conn, params=params + [n])
+            text = f"Top {n} NCM por valor de itens."
+            return sql, df, text
+
+        # 6) Totais por CFOP (itens)
+        if "cfop" in q:
+            n = topn_default(q, default=10)
+            sql = (
+                "SELECT i.cfop AS cfop, SUM(COALESCE(i.valor_total, i.quantidade*i.valor_unitario, 0)) AS total "
+                "FROM itens i JOIN documentos d ON d.id = i.documento_id"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause.replace('emitente_uf', 'd.emitente_uf').replace('destinatario_uf', 'd.destinatario_uf').replace('tipo', 'd.tipo').replace('data_emissao', 'd.data_emissao')}"
+            sql += " GROUP BY i.cfop ORDER BY total DESC LIMIT ?"
+            df = pd.read_sql_query(sql, self.db.conn, params=params + [n])
+            text = f"Top {n} CFOP por valor de itens."
+            return sql, df, text
+
+        # 7) Totais por CST (impostos por item)
+        if "cst" in q:
+            n = topn_default(q, default=10)
+            sql = (
+                "SELECT imp.cst AS cst, SUM(COALESCE(imp.valor, 0)) AS total_imposto, "
+                "SUM(COALESCE(i.valor_total, i.quantidade*i.valor_unitario, 0)) AS base_itens "
+                "FROM impostos imp "
+                "JOIN itens i ON i.id = imp.item_id "
+                "JOIN documentos d ON d.id = i.documento_id"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause.replace('emitente_uf', 'd.emitente_uf').replace('destinatario_uf', 'd.destinatario_uf').replace('tipo', 'd.tipo').replace('data_emissao', 'd.data_emissao')}"
+            sql += " GROUP BY imp.cst ORDER BY base_itens DESC LIMIT ?"
+            df = pd.read_sql_query(sql, self.db.conn, params=params + [n])
+            text = f"Top {n} CST por valor agregado de itens (e total de imposto)."
+            return sql, df, text
+
+        # 8) Top N itens por valor (descricao)
+        if ("top" in q) and ("item" in q or "produto" in q):
+            n = topn_default(q)
+            sql = (
+                "SELECT i.descricao AS item, SUM(COALESCE(i.valor_total, i.quantidade*i.valor_unitario, 0)) AS total "
+                "FROM itens i JOIN documentos d ON d.id = i.documento_id"
+            )
+            if where_clause:
+                sql += f" WHERE {where_clause.replace('emitente_uf', 'd.emitente_uf').replace('destinatario_uf', 'd.destinatario_uf').replace('tipo', 'd.tipo').replace('data_emissao', 'd.data_emissao')}"
+            sql += " GROUP BY i.descricao ORDER BY total DESC LIMIT ?"
+            df = pd.read_sql_query(sql, self.db.conn, params=params + [n])
+            text = f"Top {n} itens por valor."
+            return sql, df, text
+
+        # 9) Resumo geral por tipo de documento (fallback)
+        sql = "SELECT tipo, COUNT(1) AS qtd, SUM(COALESCE(valor_total,0)) AS total FROM documentos"
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        sql += " GROUP BY tipo ORDER BY total DESC"
+        df = pd.read_sql_query(sql, self.db.conn, params=params)
+        text = "Resumo por tipo de documento."
+        return sql, df, text
