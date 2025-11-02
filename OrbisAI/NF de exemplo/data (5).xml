@@ -1,0 +1,151 @@
+<NFe
+	xmlns="http://www.portalfiscal.inf.br/nfe">
+	<infNFe Id="NFe5544332211009988776655443322110099887766" versao="1.10">
+		<ide>
+			<cUF>31</cUF>
+			<cNF>554433221</cNF>
+			<natOp>Venda a vista</natOp>
+			<indPag>0</indPag>
+			<mod>55</mod>
+			<serie>1</serie>
+			<nNF>14</nNF>
+			<dEmi>2024-01-17</dEmi>
+			<dSaiEnt>2024-01-17</dSaiEnt>
+			<tpNF>0</tpNF>
+			<cMunFG>3106200</cMunFG>
+			<tpImp>1</tpImp>
+			<tpEmis>1</tpEmis>
+			<cDV>5</cDV>
+			<tpAmb>2</tpAmb>
+			<finNFe>1</finNFe>
+			<procEmi>0</procEmi>
+			<verProc>servicos</verProc>
+		</ide>
+		<emit>
+			<CNPJ>44332211000100</CNPJ>
+			<xNome>ket Agricola </xNome>
+			<xFant>Agricola</xFant>
+			<enderEmit>
+				<xLgr>Rua Nova</xLgr>
+				<nro>400</nro>
+				<xCpl>Andar 2</xCpl>
+				<xBairro>Bairro Novo</xBairro>
+				<cMun>3106200</cMun>
+				<xMun>Belo Horizonte</xMun>
+				<UF>MG</UF>
+				<CEP>30120010</CEP>
+				<cPais>1058</cPais>
+				<xPais>Brasil</xPais>
+				<fone>3133332222</fone>
+			</enderEmit>
+			<IE>221100334455</IE>
+		</emit>
+		<dest>
+			<CNPJ>66778899555444</CNPJ>
+			<xNome>comercializadora esteban</xNome>
+			<enderDest>
+				<xLgr>Av Central</xLgr>
+				<nro>75</nro>
+				<xCpl>Box 5</xCpl>
+				<xBairro>Centro</xBairro>
+				<cMun>3106200</cMun>
+				<xMun>Belo Horizonte</xMun>
+				<UF>MG</UF>
+				<CEP>30140050</CEP>
+				<cPais>1058</cPais>
+				<xPais>BRASIL</xPais>
+				<fone>3139988877</fone>
+			</enderDest>
+			<IE></IE>
+		</dest>
+		<det nItem="1">
+			<prod>
+				<cProd>00010</cProd>
+				<cEAN></cEAN>
+				<xProd>Suco Laranja</xProd>
+				<CFOP>5101</CFOP>
+				<uCom>cx</uCom>
+				<qCom>100.0000</qCom>
+				<vUnCom>12.50</vUnCom>
+				<vProd>1250.00</vProd>
+				<cEANTrib></cEANTrib>
+				<uTrib>cx</uTrib>
+				<qTrib>100.0000</qTrib>
+				<vUnTrib>12.50</vUnTrib>
+			</prod>
+			<imposto>
+				<ICMS>
+					<ICMS00>
+						<orig>0</orig>
+						<CST>00</CST>
+						<modBC>0</modBC>
+						<vBC>1250.00</vBC>
+						<pICMS>12.00</pICMS>
+						<vICMS>150.00</vICMS>
+					</ICMS00>
+				</ICMS>
+				<PIS>
+					<PISAliq>
+						<CST>01</CST>
+						<vBC>1250.00</vBC>
+						<pPIS>0.65</pPIS>
+						<vPIS>8.13</vPIS>
+					</PISAliq>
+				</PIS>
+				<COFINS>
+					<COFINSAliq>
+						<CST>01</CST>
+						<vBC>1250.00</vBC>
+						<pCOFINS>2.00</pCOFINS>
+						<vCOFINS>25.00</vCOFINS>
+					</COFINSAliq>
+				</COFINS>
+			</imposto>
+		</det>
+		<total>
+			<ICMSTot>
+				<vBC>1250.00</vBC>
+				<vICMS>150.00</vICMS>
+				<vBCST>0</vBCST>
+				<vST>0</vST>
+				<vProd>1250.00</vProd>
+				<vFrete>0</vFrete>
+				<vSeg>0</vSeg>
+				<vDesc>0</vDesc>
+				<vII>0</vII>
+				<vIPI>0</vIPI>
+				<vPIS>8.13</vPIS>
+				<vCOFINS>25.00</vCOFINS>
+				<vOutro>0</vOutro>
+				<vNF>1433.13</vNF>
+			</ICMSTot>
+		</total>
+		<transp>
+			<modFrete>0</modFrete>
+			<transporta>
+				<CNPJ>77885544000122</CNPJ>
+				<xNome>Transp Minas</xNome>
+				<IE>22334455</IE>
+				<xEnder>Rua Nova - Bairro Novo</xEnder>
+				<xMun>Belo Horizonte</xMun>
+				<UF>MG</UF>
+			</transporta>
+			<veicTransp>
+				<placa>MNO5678</placa>
+				<UF>MG</UF>
+				<RNTC>556677889</RNTC>
+			</veicTransp>
+			<vol>
+				<qVol>12</qVol>
+				<esp>CAIXA</esp>
+				<marca>MARCAE</marca>
+				<nVol>2</nVol>
+				<pesoL>125.00</pesoL>
+				<pesoB>130.00</pesoB>
+			</vol>
+		</transp>
+		<infAdic>
+			<infAdFisco>Nota simulada para testes - Exemplo 5</infAdFisco>
+		</infAdic>
+	</infNFe>
+</NFe>

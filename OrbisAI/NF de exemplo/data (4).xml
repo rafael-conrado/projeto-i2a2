@@ -1,0 +1,151 @@
+<NFe
+	xmlns="http://www.portalfiscal.inf.br/nfe">
+	<infNFe Id="NFe1122334455667788990011223344556677889900" versao="1.10">
+		<ide>
+			<cUF>43</cUF>
+			<cNF>112233445</cNF>
+			<natOp>Venda a vista</natOp>
+			<indPag>0</indPag>
+			<mod>55</mod>
+			<serie>3</serie>
+			<nNF>13</nNF>
+			<dEmi>2024-03-20</dEmi>
+			<dSaiEnt>2024-03-20</dSaiEnt>
+			<tpNF>0</tpNF>
+			<cMunFG>4305108</cMunFG>
+			<tpImp>1</tpImp>
+			<tpEmis>1</tpEmis>
+			<cDV>1</cDV>
+			<tpAmb>2</tpAmb>
+			<finNFe>1</finNFe>
+			<procEmi>0</procEmi>
+			<verProc>consultoria</verProc>
+		</ide>
+		<emit>
+			<CNPJ>99887766000155</CNPJ>
+			<xNome>Agentes de dominio</xNome>
+			<xFant>Exemplo4</xFant>
+			<enderEmit>
+				<xLgr>Av Rio Branco</xLgr>
+				<nro>950</nro>
+				<xCpl>Andar 5</xCpl>
+				<xBairro>Pinheiros</xBairro>
+				<cMun>4305108</cMun>
+				<xMun>Porto Alegre</xMun>
+				<UF>RS</UF>
+				<CEP>90040010</CEP>
+				<cPais>1058</cPais>
+				<xPais>Brasil</xPais>
+				<fone>5133334444</fone>
+			</enderEmit>
+			<IE>998877665544</IE>
+		</emit>
+		<dest>
+			<CNPJ>33445566000188</CNPJ>
+			<xNome>suprementos TI</xNome>
+			<enderDest>
+				<xLgr>Travessa do Sol</xLgr>
+				<nro>7</nro>
+				<xCpl>Casa</xCpl>
+				<xBairro>Morumbi</xBairro>
+				<cMun>4305108</cMun>
+				<xMun>Porto Alegre</xMun>
+				<UF>RS</UF>
+				<CEP>91234567</CEP>
+				<cPais>1058</cPais>
+				<xPais>BRASIL</xPais>
+				<fone>51988776655</fone>
+			</enderDest>
+			<IE></IE>
+		</dest>
+		<det nItem="1">
+			<prod>
+				<cProd>00030</cProd>
+				<cEAN></cEAN>
+				<xProd>Fralda Premium</xProd>
+				<CFOP>5101</CFOP>
+				<uCom>pack</uCom>
+				<qCom>30.0000</qCom>
+				<vUnCom>35.75</vUnCom>
+				<vProd>1072.50</vProd>
+				<cEANTrib></cEANTrib>
+				<uTrib>pack</uTrib>
+				<qTrib>30.0000</qTrib>
+				<vUnTrib>35.75</vUnTrib>
+			</prod>
+			<imposto>
+				<ICMS>
+					<ICMS00>
+						<orig>0</orig>
+						<CST>00</CST>
+						<modBC>0</modBC>
+						<vBC>1072.50</vBC>
+						<pICMS>12.00</pICMS>
+						<vICMS>128.70</vICMS>
+					</ICMS00>
+				</ICMS>
+				<PIS>
+					<PISAliq>
+						<CST>01</CST>
+						<vBC>1072.50</vBC>
+						<pPIS>0.65</pPIS>
+						<vPIS>6.97</vPIS>
+					</PISAliq>
+				</PIS>
+				<COFINS>
+					<COFINSAliq>
+						<CST>01</CST>
+						<vBC>1072.50</vBC>
+						<pCOFINS>2.00</pCOFINS>
+						<vCOFINS>21.45</vCOFINS>
+					</COFINSAliq>
+				</COFINS>
+			</imposto>
+		</det>
+		<total>
+			<ICMSTot>
+				<vBC>1072.50</vBC>
+				<vICMS>128.70</vICMS>
+				<vBCST>0</vBCST>
+				<vST>0</vST>
+				<vProd>1072.50</vProd>
+				<vFrete>0</vFrete>
+				<vSeg>0</vSeg>
+				<vDesc>0</vDesc>
+				<vII>0</vII>
+				<vIPI>0</vIPI>
+				<vPIS>6.97</vPIS>
+				<vCOFINS>21.45</vCOFINS>
+				<vOutro>0</vOutro>
+				<vNF>1229.62</vNF>
+			</ICMSTot>
+		</total>
+		<transp>
+			<modFrete>0</modFrete>
+			<transporta>
+				<CNPJ>66778899000133</CNPJ>
+				<xNome>Transp Sul</xNome>
+				<IE>44556677</IE>
+				<xEnder>Av Rio Branco - Centro</xEnder>
+				<xMun>Porto Alegre</xMun>
+				<UF>RS</UF>
+			</transporta>
+			<veicTransp>
+				<placa>JKL4567</placa>
+				<UF>RS</UF>
+				<RNTC>334455667</RNTC>
+			</veicTransp>
+			<vol>
+				<qVol>8</qVol>
+				<esp>CAIXA</esp>
+				<marca>MARCAD</marca>
+				<nVol>1</nVol>
+				<pesoL>107.25</pesoL>
+				<pesoB>115.00</pesoB>
+			</vol>
+		</transp>
+		<infAdic>
+			<infAdFisco>Nota simulada para testes</infAdFisco>
+		</infAdic>
+	</infNFe>
+</NFe>

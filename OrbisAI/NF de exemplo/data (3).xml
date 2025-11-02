@@ -1,0 +1,151 @@
+<NFe
+	xmlns="http://www.portalfiscal.inf.br/nfe">
+	<infNFe Id="NFe9812739812739812739812739812739812739812" versao="1.10">
+		<ide>
+			<cUF>41</cUF>
+			<cNF>981273981</cNF>
+			<natOp>Venda a vista</natOp>
+			<indPag>0</indPag>
+			<mod>55</mod>
+			<serie>1</serie>
+			<nNF>12</nNF>
+			<dEmi>2024-05-02</dEmi>
+			<dSaiEnt>2024-05-02</dSaiEnt>
+			<tpNF>0</tpNF>
+			<cMunFG>4106902</cMunFG>
+			<tpImp>1</tpImp>
+			<tpEmis>1</tpEmis>
+			<cDV>9</cDV>
+			<tpAmb>2</tpAmb>
+			<finNFe>1</finNFe>
+			<procEmi>0</procEmi>
+			<verProc>Servicos</verProc>
+		</ide>
+		<emit>
+			<CNPJ>55667788000166</CNPJ>
+			<xNome>xarium</xNome>
+			<xFant>xarium ltda</xFant>
+			<enderEmit>
+				<xLgr>Rua das Acacias</xLgr>
+				<nro>78</nro>
+				<xCpl>Conjunto</xCpl>
+				<xBairro>Bela Vista</xBairro>
+				<cMun>4106902</cMun>
+				<xMun>Curitiba</xMun>
+				<UF>PR</UF>
+				<CEP>80040010</CEP>
+				<cPais>1058</cPais>
+				<xPais>Brasil</xPais>
+				<fone>4144445555</fone>
+			</enderEmit>
+			<IE>334455667788</IE>
+		</emit>
+		<dest>
+			<CNPJ>77889900000155</CNPJ>
+			<xNome>Cliente Demo 3</xNome>
+			<enderDest>
+				<xLgr>Av Central</xLgr>
+				<nro>1000</nro>
+				<xCpl>Galpão 3</xCpl>
+				<xBairro>Jardim</xBairro>
+				<cMun>4106902</cMun>
+				<xMun>Curitiba</xMun>
+				<UF>PR</UF>
+				<CEP>80010050</CEP>
+				<cPais>1058</cPais>
+				<xPais>BRASIL</xPais>
+				<fone>4199998888</fone>
+			</enderDest>
+			<IE></IE>
+		</dest>
+		<det nItem="1">
+			<prod>
+				<cProd>00010</cProd>
+				<cEAN></cEAN>
+				<xProd>Suco Laranja</xProd>
+				<CFOP>5401</CFOP>
+				<uCom>cx</uCom>
+				<qCom>60.0000</qCom>
+				<vUnCom>12.50</vUnCom>
+				<vProd>750.00</vProd>
+				<cEANTrib></cEANTrib>
+				<uTrib>cx</uTrib>
+				<qTrib>60.0000</qTrib>
+				<vUnTrib>12.50</vUnTrib>
+			</prod>
+			<imposto>
+				<ICMS>
+					<ICMS00>
+						<orig>0</orig>
+						<CST>00</CST>
+						<modBC>0</modBC>
+						<vBC>750.00</vBC>
+						<pICMS>12.00</pICMS>
+						<vICMS>90.00</vICMS>
+					</ICMS00>
+				</ICMS>
+				<PIS>
+					<PISAliq>
+						<CST>01</CST>
+						<vBC>750.00</vBC>
+						<pPIS>0.65</pPIS>
+						<vPIS>4.88</vPIS>
+					</PISAliq>
+				</PIS>
+				<COFINS>
+					<COFINSAliq>
+						<CST>01</CST>
+						<vBC>750.00</vBC>
+						<pCOFINS>2.00</pCOFINS>
+						<vCOFINS>15.00</vCOFINS>
+					</COFINSAliq>
+				</COFINS>
+			</imposto>
+		</det>
+		<total>
+			<ICMSTot>
+				<vBC>750.00</vBC>
+				<vICMS>90.00</vICMS>
+				<vBCST>0</vBCST>
+				<vST>0</vST>
+				<vProd>750.00</vProd>
+				<vFrete>0</vFrete>
+				<vSeg>0</vSeg>
+				<vDesc>0</vDesc>
+				<vII>0</vII>
+				<vIPI>0</vIPI>
+				<vPIS>4.88</vPIS>
+				<vCOFINS>15.00</vCOFINS>
+				<vOutro>0</vOutro>
+				<vNF>859.88</vNF>
+			</ICMSTot>
+		</total>
+		<transp>
+			<modFrete>0</modFrete>
+			<transporta>
+				<CNPJ>22334455000166</CNPJ>
+				<xNome>Transp Curitiba</xNome>
+				<IE>55667788</IE>
+				<xEnder>Rua das Acacias - Bela Vista</xEnder>
+				<xMun>Curitiba</xMun>
+				<UF>PR</UF>
+			</transporta>
+			<veicTransp>
+				<placa>GHI3456</placa>
+				<UF>PR</UF>
+				<RNTC>223344556</RNTC>
+			</veicTransp>
+			<vol>
+				<qVol>6</qVol>
+				<esp>CAIXA</esp>
+				<marca>MARCAC</marca>
+				<nVol>6</nVol>
+				<pesoL>75.00</pesoL>
+				<pesoB>80.00</pesoB>
+			</vol>
+		</transp>
+		<infAdic>
+			<infAdFisco>Nota simulada para testes - Exemplo 3</infAdFisco>
+		</infAdic>
+	</infNFe>
+</NFe>
